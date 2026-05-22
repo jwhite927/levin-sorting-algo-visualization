@@ -153,4 +153,9 @@ async def live_stream(websocket: WebSocket, exp_id: str):
                 if status == "done":
                     break
     except WebSocketDisconnect:
+        return
+    # Always send an explicit close frame so the client onclose fires reliably.
+    try:
+        await websocket.close()
+    except Exception:
         pass

@@ -108,7 +108,8 @@ export default function App() {
   const [stepIndex, setStepIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);   // true only during POST /experiments
+  const [streaming, setStreaming] = useState(false); // true while WS is open
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -132,10 +133,19 @@ export default function App() {
   const handleRun = useCallback(async () => {
     setError(null);
     setLoading(true);
+    setStreaming(false);
     setSteps([]);
     setStepIndex(0);
     setPlaying(false);
-    if (wsRef.current) wsRef.current.close();
+
+    // Silence the old socket before closing so its onclose doesn't
+    // immediately call setLoading(false) and undo the state we just set.
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
     try {
       const { id } = await createExperiment(config);
@@ -144,8 +154,17 @@ export default function App() {
         const ws = openLiveSocket(
           id,
           (step) => setSteps((prev) => [...prev, step]),
-          () => setLoading(false)
+          () => setStreaming(false)
         );
+        ws.onopen = () => {
+          setLoading(false);   // button re-enabled as soon as stream is live
+          setStreaming(true);
+        };
+        ws.onerror = () => {
+          setError("WebSocket error — experiment may have failed.");
+          setLoading(false);
+          setStreaming(false);
+        };
         wsRef.current = ws;
       } else {
         // Poll until done, then bulk-load
@@ -307,6 +326,9 @@ export default function App() {
             {loading ? "Running…" : "Run Experiment"}
           </button>
 
+          {streaming && (
+            <span style={{ fontSize: 12, color: "#34d399" }}>● live</span>
+          )}
           {error && (
             <span style={{ fontSize: 12, color: "#f87171" }}>{error}</span>
           )}
