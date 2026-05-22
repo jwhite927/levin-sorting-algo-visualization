@@ -27,6 +27,7 @@ CELL_CLASSES = {
 }
 
 STREAM_MAXLEN = 100_000
+MAX_STEPS = 10_000
 
 
 class StreamingStatusProbe(StatusProbe):
@@ -133,9 +134,13 @@ def run_experiment(experiment_id: str, config: dict, redis_url: str) -> None:
     thread_lock.release()
 
     # Wait for sort to stabilise
+    aborted = False
     timeout = time.time() + 300  # 5-minute guard
     while not _no_cells_should_move(cells):
         if time.time() > timeout:
+            break
+        if len(probe.sorting_steps) >= MAX_STEPS:
+            aborted = True
             break
         time.sleep(0.05)
 
@@ -145,6 +150,7 @@ def run_experiment(experiment_id: str, config: dict, redis_url: str) -> None:
     group.status = GroupStatus.MERGED
     thread_lock.release()
 
-    r.hset(f"experiment:{experiment_id}", "status", "done")
+    final_status = "aborted" if aborted else "done"
+    r.hset(f"experiment:{experiment_id}", "status", final_status)
     r.expire(f"experiment:{experiment_id}", 3600)
     r.expire(f"experiment:{experiment_id}:steps", 3600)

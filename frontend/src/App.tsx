@@ -108,8 +108,9 @@ export default function App() {
   const [stepIndex, setStepIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [loading, setLoading] = useState(false);   // true only during POST /experiments
+  const [loading, setLoading] = useState(false);    // true only during POST /experiments
   const [streaming, setStreaming] = useState(false); // true while WS is open
+  const [aborted, setAborted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -132,6 +133,7 @@ export default function App() {
 
   const handleRun = useCallback(async () => {
     setError(null);
+    setAborted(false);
     setLoading(true);
     setStreaming(false);
     setSteps([]);
@@ -154,7 +156,8 @@ export default function App() {
         const ws = openLiveSocket(
           id,
           (step) => setSteps((prev) => [...prev, step]),
-          () => setStreaming(false)
+          () => setStreaming(false),
+          (_stepCount) => setAborted(true)
         );
         ws.onopen = () => {
           setLoading(false);   // button re-enabled as soon as stream is live
@@ -334,6 +337,40 @@ export default function App() {
           )}
         </div>
       </Section>
+
+      {aborted && (
+        <div
+          style={{
+            background: "#3b1f1f",
+            border: "1px solid #7f1d1d",
+            borderRadius: 8,
+            padding: "10px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: 13,
+            color: "#fca5a5",
+          }}
+        >
+          <span>
+            ⚠ Experiment aborted after 25,000 steps. The last recorded state is shown below.
+          </span>
+          <button
+            onClick={() => setAborted(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#fca5a5",
+              cursor: "pointer",
+              fontSize: 16,
+              lineHeight: 1,
+              padding: "0 4px",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {steps.length > 0 && (
         <>

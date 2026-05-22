@@ -31,11 +31,21 @@ export async function getSteps(id: string): Promise<Step[]> {
 export function openLiveSocket(
   id: string,
   onStep: (step: Step) => void,
-  onDone: () => void
+  onDone: () => void,
+  onAborted: (stepCount: number) => void
 ): WebSocket {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/experiments/${id}/live`);
-  ws.onmessage = (e) => onStep(JSON.parse(e.data) as Step);
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data) as Record<string, unknown>;
+    if (msg.event === "aborted") {
+      onAborted(msg.step_count as number);
+    } else if (msg.event === "done") {
+      // terminal "done" event — nothing extra needed, onclose will fire
+    } else {
+      onStep(msg as unknown as Step);
+    }
+  };
   ws.onclose = () => onDone();
   return ws;
 }

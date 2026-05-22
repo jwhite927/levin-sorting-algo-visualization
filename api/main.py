@@ -150,12 +150,18 @@ async def live_stream(websocket: WebSocket, exp_id: str):
                         last_id = msg_id
             else:
                 status = await r.hget(f"experiment:{exp_id}", "status")
-                if status == "done":
+                if status in ("done", "aborted"):
                     break
     except WebSocketDisconnect:
         return
-    # Always send an explicit close frame so the client onclose fires reliably.
+
+    # Send a terminal event so the client knows why the stream ended.
+    status = await r.hget(f"experiment:{exp_id}", "status")
+    step_count = await r.xlen(f"experiment:{exp_id}:steps")
     try:
+        await websocket.send_text(
+            json.dumps({"event": status, "step_count": step_count})
+        )
         await websocket.close()
     except Exception:
         pass
