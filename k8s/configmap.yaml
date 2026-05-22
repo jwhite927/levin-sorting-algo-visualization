@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sim-defaults
+  namespace: sorting-viz
+data:
+  N: "20"
+  frozen_pct: "0.0"
+  bubble_ratio: "0.34"
+  insertion_ratio: "0.33"
+  selection_ratio: "0.33"
