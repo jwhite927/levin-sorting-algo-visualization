@@ -46,6 +46,16 @@ segregate into colour-coded bands — in real time, step by step, with full scru
 control — is another. This visualiser makes that possible without a display server,
 matplotlib windows, or static GIFs.
 
+### A Note on How It Was Built
+
+This project was coded agentically in collaboration with
+[Claude Code](https://claude.ai/code) as a demonstration of AI-assisted software
+development. The full stack — simulation layer, Redis streaming, FastAPI gateway,
+React + Canvas frontend, and Docker/Kubernetes infrastructure — was implemented
+through an iterative back-and-forth with the agent: describing intent, reviewing
+output, catching bugs, and refining behaviour across a single session. The science
+and the curiosity behind it are mine; the implementation was a genuine collaboration.
+
 ---
 
 ## Architecture
