@@ -3,7 +3,7 @@
 # Add a Redis plugin in the Railway dashboard — it auto-sets REDIS_URL.
 
 [build]
-  dockerfile = "api/Dockerfile"
+  dockerfilePath = "api/Dockerfile"
 
 [deploy]
   startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
