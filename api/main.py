@@ -17,6 +17,8 @@ from typing import Annotated
 import redis.asyncio as aioredis
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from simulation import run_experiment
@@ -83,6 +85,11 @@ class ExperimentStatus(BaseModel):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    return {"status": "ok"}
 
 
 @app.post("/experiments", response_model=ExperimentCreated, status_code=201)
@@ -165,3 +172,19 @@ async def live_stream(websocket: WebSocket, exp_id: str):
         await websocket.close()
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Static frontend (production only — ./static is baked in by the Dockerfile)
+# ---------------------------------------------------------------------------
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+if os.path.isdir(_STATIC_DIR):
+    # Serve hashed asset bundles under /assets/ with long-lived caching
+    app.mount("/assets", StaticFiles(directory=os.path.join(_STATIC_DIR, "assets")), name="assets")
+
+    # SPA catch-all: any unmatched GET returns index.html.
+    # Defined last so it never shadows the API routes above.
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(_STATIC_DIR, "index.html"))

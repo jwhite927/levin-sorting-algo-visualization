@@ -1,0 +1,11 @@
+# Railway deployment configuration
+# Single service: FastAPI serves both the API and the compiled Vite frontend.
+# Add a Redis plugin in the Railway dashboard — it auto-sets REDIS_URL.
+
+[build]
+  dockerfile = "api/Dockerfile"
+
+[deploy]
+  startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+  healthcheckPath = "/health"
+  healthcheckTimeout = 30
