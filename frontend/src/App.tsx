@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrayView } from "./components/ArrayView";
 import { Controls } from "./components/Controls";
 import { MetricsPanel } from "./components/MetricsPanel";
-import { createExperiment, getSteps, openLiveSocket } from "./api";
+import { createExperiment, openLiveSocket } from "./api";
 import type { AlgotypeRatios, ExperimentConfig, Step } from "./types";
 
 function Section({
@@ -94,15 +94,12 @@ function RatioSliders({
   );
 }
 
-type LoadMode = "live" | "bulk";
-
 export default function App() {
   const [config, setConfig] = useState<ExperimentConfig>({
     n: 20,
     algotype_ratios: { bubble: 0.34, insertion: 0.33, selection: 0.33 },
     frozen_pct: 0.0,
   });
-  const [mode, setMode] = useState<LoadMode>("live");
 
   const [steps, setSteps] = useState<Step[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -152,43 +149,27 @@ export default function App() {
     try {
       const { id } = await createExperiment(config);
 
-      if (mode === "live") {
-        const ws = openLiveSocket(
-          id,
-          (step) => setSteps((prev) => [...prev, step]),
-          () => setStreaming(false),
-          (_stepCount) => setAborted(true)
-        );
-        ws.onopen = () => {
-          setLoading(false);   // button re-enabled as soon as stream is live
-          setStreaming(true);
-        };
-        ws.onerror = () => {
-          setError("WebSocket error — experiment may have failed.");
-          setLoading(false);
-          setStreaming(false);
-        };
-        wsRef.current = ws;
-      } else {
-        // Poll until done, then bulk-load
-        let done = false;
-        while (!done) {
-          await new Promise((r) => setTimeout(r, 800));
-          const all = await getSteps(id);
-          if (all.length > 0) {
-            setSteps(all);
-          }
-          const resp = await fetch(`/experiments/${id}`);
-          const status = await resp.json();
-          if (status.status === "done") done = true;
-        }
+      const ws = openLiveSocket(
+        id,
+        (step) => setSteps((prev) => [...prev, step]),
+        () => setStreaming(false),
+        (_stepCount) => setAborted(true)
+      );
+      ws.onopen = () => {
+        setLoading(false);   // button re-enabled as soon as stream is live
+        setStreaming(true);
+      };
+      ws.onerror = () => {
+        setError("WebSocket error — experiment may have failed.");
         setLoading(false);
-      }
+        setStreaming(false);
+      };
+      wsRef.current = ws;
     } catch (e) {
       setError(String(e));
       setLoading(false);
     }
-  }, [config, mode]);
+  }, [config]);
 
   const currentStep = steps[stepIndex];
 
@@ -292,26 +273,6 @@ export default function App() {
         </div>
 
         <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", gap: 8, fontSize: 12 }}>
-            {(["live", "bulk"] as LoadMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                style={{
-                  background: mode === m ? "#1e3a5f" : "#1e2433",
-                  border: `1px solid ${mode === m ? "#3b82f6" : "#2d3748"}`,
-                  color: mode === m ? "#93c5fd" : "#94a3b8",
-                  borderRadius: 4,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                  fontSize: 12,
-                }}
-              >
-                {m === "live" ? "Live stream" : "Bulk load"}
-              </button>
-            ))}
-          </div>
-
           <button
             onClick={handleRun}
             disabled={loading}
