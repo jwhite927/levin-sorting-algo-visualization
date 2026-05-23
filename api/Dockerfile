@@ -14,9 +14,11 @@ WORKDIR /app
 COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# cell_research lives at /cell_research; PYTHONPATH lets `import cell_research` resolve
-COPY cell_research /cell_research
-ENV PYTHONPATH=/
+# Copy cell_research into a dedicated /packages/ directory so that PYTHONPATH
+# points to exactly one folder containing exactly one package — avoiding the
+# namespace-package ambiguity that occurs with PYTHONPATH=/ (too broad).
+COPY cell_research /packages/cell_research
+ENV PYTHONPATH=/packages
 
 COPY api/ .
 
