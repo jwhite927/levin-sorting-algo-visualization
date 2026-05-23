@@ -5,7 +5,8 @@
       "WebFetch(domain:www.drmichaellevin.org)",
       "mcp__railway__get_logs",
       "mcp__Railway__get_logs",
-      "mcp__Railway__list_deployments"
+      "mcp__Railway__list_deployments",
+      "mcp__Railway__list_variables"
     ]
   }
 }
