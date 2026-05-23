@@ -14,6 +14,10 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      "/stats": {
+        target: apiUrl,
+        changeOrigin: true,
+      },
     },
   },
 });

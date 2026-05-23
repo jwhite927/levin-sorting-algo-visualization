@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrayView } from "./components/ArrayView";
 import { Controls } from "./components/Controls";
 import { MetricsPanel } from "./components/MetricsPanel";
+import { StatsPanel } from "./components/StatsPanel";
 import { createExperiment, openLiveSocket } from "./api";
 import type { AlgotypeRatios, ExperimentConfig, Step } from "./types";
 
@@ -109,6 +110,7 @@ export default function App() {
   const [streaming, setStreaming] = useState(false); // true while WS is open
   const [aborted, setAborted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statsRefreshKey, setStatsRefreshKey] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const playTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -152,7 +154,10 @@ export default function App() {
       const ws = openLiveSocket(
         id,
         (step) => setSteps((prev) => [...prev, step]),
-        () => setStreaming(false),
+        () => {
+          setStreaming(false);
+          setStatsRefreshKey((k) => k + 1);
+        },
         (_stepCount) => setAborted(true)
       );
       ws.onopen = () => {
@@ -411,6 +416,16 @@ export default function App() {
           </Section>
         </>
       )}
+
+      <Section
+        title={`Statistics — n = ${config.n}, frozen = ${(config.frozen_pct * 100).toFixed(0)}%`}
+      >
+        <StatsPanel
+          n={config.n}
+          frozenPct={config.frozen_pct}
+          refreshKey={statsRefreshKey}
+        />
+      </Section>
     </div>
   );
 }

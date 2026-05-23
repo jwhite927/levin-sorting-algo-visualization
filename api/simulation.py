@@ -37,15 +37,64 @@ class StreamingStatusProbe(StatusProbe):
         super().__init__()
         self.experiment_id = experiment_id
         self.redis_client = redis_client
+        self.min_aggregation: float | None = None
+        self.max_aggregation: float | None = None
+        self.last_aggregation: float = 0.0
 
     def record_sorting_step(self, snapshot: dict):
         super().record_sorting_step(snapshot)
+        agg = snapshot.get("metrics", {}).get("aggregation", 0.0)
+        if self.min_aggregation is None or agg < self.min_aggregation:
+            self.min_aggregation = agg
+        if self.max_aggregation is None or agg > self.max_aggregation:
+            self.max_aggregation = agg
+        self.last_aggregation = agg
         self.redis_client.xadd(
             f"experiment:{self.experiment_id}:steps",
             {"data": json.dumps(snapshot)},
             maxlen=STREAM_MAXLEN,
             approximate=True,
         )
+
+
+def _record_summary(
+    r: sync_redis.Redis,
+    experiment_id: str,
+    config: dict,
+    probe: StreamingStatusProbe,
+    status: str,
+    step_count: int,
+) -> None:
+    """Persist a lightweight experiment summary to Redis with no TTL.
+
+    Stored data is used by the GET /stats endpoint to compute aggregate
+    statistics across all experiments with the same (n, frozen_pct).
+    """
+    n: int = config.get("n", 20)
+    frozen_pct: float = config.get("frozen_pct", 0.0)
+    fp_key = f"{frozen_pct:.2f}"
+
+    min_agg = probe.min_aggregation if probe.min_aggregation is not None else 0.0
+    max_agg = probe.max_aggregation if probe.max_aggregation is not None else 0.0
+
+    r.hset(
+        f"experiment:{experiment_id}:summary",
+        mapping={
+            "n": str(n),
+            "frozen_pct": fp_key,
+            "status": status,
+            "step_count": str(step_count),
+            "timestamp": str(time.time()),
+            "min_aggregation": str(min_agg),
+            "max_aggregation": str(max_agg),
+            "final_aggregation": str(probe.last_aggregation),
+        },
+    )
+    # No TTL — summary persists after experiment step data expires.
+
+    stats_key = f"stats:n={n}:fp={fp_key}"
+    r.zadd(stats_key, {experiment_id: time.time()})
+    # No TTL on the index either.
 
 
 def _no_cells_should_move(cells: list) -> bool:
@@ -154,3 +203,6 @@ def run_experiment(experiment_id: str, config: dict, redis_url: str) -> None:
     r.hset(f"experiment:{experiment_id}", "status", final_status)
     r.expire(f"experiment:{experiment_id}", 3600)
     r.expire(f"experiment:{experiment_id}:steps", 3600)
+
+    # Record a persistent summary for the /stats endpoint.
+    _record_summary(r, experiment_id, config, probe, final_status, len(probe.sorting_steps))

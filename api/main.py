@@ -10,12 +10,13 @@ WS   /experiments/{id}/live  – stream steps as they are produced
 import asyncio
 import json
 import os
+import statistics
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated
 
 import redis.asyncio as aioredis
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -82,6 +83,34 @@ class ExperimentStatus(BaseModel):
     step_count: int
 
 
+class ExperimentSummaryOut(BaseModel):
+    id: str
+    status: str
+    min_aggregation: float
+    max_aggregation: float
+    final_aggregation: float
+    step_count: int
+    timestamp: float
+
+
+class StepCountStats(BaseModel):
+    mean: float
+    min: int
+    max: int
+
+
+class StatsResponse(BaseModel):
+    n: int
+    frozen_pct: float
+    total_experiments: int
+    completed: int
+    aborted: int
+    avg_min_aggregation: float
+    avg_max_aggregation: float
+    step_count: StepCountStats
+    experiments: list[ExperimentSummaryOut]
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -130,6 +159,72 @@ async def get_steps(exp_id: str):
         raise HTTPException(status_code=404, detail="Experiment not found")
     messages = await r.xrange(f"experiment:{exp_id}:steps")
     return [json.loads(msg[1]["data"]) for msg in messages]
+
+
+@app.get("/stats", response_model=StatsResponse)
+async def get_stats(
+    n: int = Query(ge=2, le=200),
+    frozen_pct: float = Query(ge=0, le=0.5),
+) -> StatsResponse:
+    r = _get_redis()
+    fp_key = f"{frozen_pct:.2f}"
+    stats_key = f"stats:n={n}:fp={fp_key}"
+
+    exp_ids: list[str] = await r.zrange(stats_key, 0, -1)
+
+    raw_summaries: list[tuple[str, dict]] = []
+    for exp_id in exp_ids:
+        data = await r.hgetall(f"experiment:{exp_id}:summary")
+        if data:
+            raw_summaries.append((exp_id, data))
+
+    if not raw_summaries:
+        return StatsResponse(
+            n=n,
+            frozen_pct=frozen_pct,
+            total_experiments=0,
+            completed=0,
+            aborted=0,
+            avg_min_aggregation=0.0,
+            avg_max_aggregation=0.0,
+            step_count=StepCountStats(mean=0.0, min=0, max=0),
+            experiments=[],
+        )
+
+    experiments: list[ExperimentSummaryOut] = [
+        ExperimentSummaryOut(
+            id=exp_id,
+            status=data.get("status", "unknown"),
+            min_aggregation=float(data.get("min_aggregation", 0)),
+            max_aggregation=float(data.get("max_aggregation", 0)),
+            final_aggregation=float(data.get("final_aggregation", 0)),
+            step_count=int(data.get("step_count", 0)),
+            timestamp=float(data.get("timestamp", 0)),
+        )
+        for exp_id, data in raw_summaries
+    ]
+    # Most recent first
+    experiments.sort(key=lambda e: e.timestamp, reverse=True)
+
+    min_aggs = [e.min_aggregation for e in experiments]
+    max_aggs = [e.max_aggregation for e in experiments]
+    step_counts = [e.step_count for e in experiments]
+
+    return StatsResponse(
+        n=n,
+        frozen_pct=frozen_pct,
+        total_experiments=len(experiments),
+        completed=sum(1 for e in experiments if e.status == "done"),
+        aborted=sum(1 for e in experiments if e.status == "aborted"),
+        avg_min_aggregation=statistics.mean(min_aggs),
+        avg_max_aggregation=statistics.mean(max_aggs),
+        step_count=StepCountStats(
+            mean=statistics.mean(step_counts),
+            min=min(step_counts),
+            max=max(step_counts),
+        ),
+        experiments=experiments,
+    )
 
 
 @app.websocket("/experiments/{exp_id}/live")

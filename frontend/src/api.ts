@@ -1,4 +1,4 @@
-import type { ExperimentConfig, ExperimentStatus, Step } from "./types";
+import type { ExperimentConfig, ExperimentStatus, Step, StatsResult } from "./types";
 
 const BASE = "/experiments";
 
@@ -25,6 +25,15 @@ export async function getExperimentStatus(
 export async function getSteps(id: string): Promise<Step[]> {
   const res = await fetch(`${BASE}/${id}/steps`);
   if (!res.ok) throw new Error(`GET /experiments/${id}/steps failed`);
+  return res.json();
+}
+
+export async function getStats(
+  n: number,
+  frozenPct: number
+): Promise<StatsResult | null> {
+  const res = await fetch(`/stats?n=${n}&frozen_pct=${frozenPct}`);
+  if (!res.ok) return null;
   return res.json();
 }
 
