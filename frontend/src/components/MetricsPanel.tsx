@@ -3,7 +3,7 @@
  * Includes the "delayed gratification" panel: sortedness line with descent
  * segments (temporary regression) highlighted in red.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import type { Step } from "../types";
 
@@ -12,10 +12,83 @@ interface Props {
   currentIndex: number;
 }
 
+type MetricKey = "sortedness" | "monotonicity_error" | "aggregation";
+
+// ---------------------------------------------------------------------------
+// Tooltip
+// ---------------------------------------------------------------------------
+
+const METRIC_DESCRIPTIONS: Record<MetricKey, string> = {
+  sortedness:
+    "Fraction of adjacent pairs that are in the correct order (0 = fully unsorted, 1 = fully sorted). " +
+    "Red segments on the chart are 'delayed gratification' — steps where sortedness temporarily decreases " +
+    "so the array can navigate around a frozen or defective cell and recover later.",
+  monotonicity_error:
+    "Number of adjacent pairs that are out of order. A perfectly sorted array has 0. " +
+    "Unlike sortedness this is an absolute count, so it scales with array size N.",
+  aggregation:
+    "Fraction of cells that have at least one same-type neighbor. " +
+    "Rises over time as bubble, insertion, and selection cells spontaneously cluster into contiguous runs — " +
+    "the chimeric emergence phenomenon described in Zhang, Goldstein & Levin (2024).",
+};
+
+function InfoTooltip({ metricKey }: { metricKey: MetricKey }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 13,
+          height: 13,
+          borderRadius: "50%",
+          border: "1px solid #475569",
+          color: "#64748b",
+          fontSize: 9,
+          cursor: "default",
+          marginLeft: 4,
+          lineHeight: 1,
+          userSelect: "none",
+        }}
+      >
+        i
+      </span>
+      {visible && (
+        <span
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1e2433",
+            border: "1px solid #2d3748",
+            borderRadius: 6,
+            padding: "8px 10px",
+            fontSize: 11,
+            color: "#cbd5e1",
+            lineHeight: 1.5,
+            whiteSpace: "normal",
+            width: 260,
+            zIndex: 10,
+            pointerEvents: "none",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+          }}
+        >
+          {METRIC_DESCRIPTIONS[metricKey]}
+        </span>
+      )}
+    </span>
+  );
+}
+
 const CHART_H = 80;
 const CHART_W = 340;
-
-type MetricKey = "sortedness" | "monotonicity_error" | "aggregation";
 
 interface ChartSpec {
   key: MetricKey;
@@ -46,7 +119,7 @@ function useChart(
     const svg = d3.select(ref.current);
     svg.selectAll("*").remove();
 
-    const mg = { top: 6, right: 12, bottom: 18, left: 32 };
+    const mg = { top: 16, right: 12, bottom: 18, left: 32 };
     const w = CHART_W - mg.left - mg.right;
     const h = CHART_H - mg.top - mg.bottom;
 
@@ -157,19 +230,25 @@ export function MetricsPanel({ steps, currentIndex }: Props) {
       <div style={{ display: "flex", gap: 24, fontSize: 12, color: "#94a3b8" }}>
         {cur && (
           <>
-            <span>
-              Sortedness:{" "}
-              <b style={{ color: "#3b82f6" }}>
+            <span style={{ display: "flex", alignItems: "center" }}>
+              Sortedness
+              <InfoTooltip metricKey="sortedness" />
+              {": "}
+              <b style={{ color: "#3b82f6", marginLeft: 3 }}>
                 {(cur.sortedness * 100).toFixed(1)}%
               </b>
             </span>
-            <span>
-              Mono. Error:{" "}
-              <b style={{ color: "#f59e0b" }}>{cur.monotonicity_error}</b>
+            <span style={{ display: "flex", alignItems: "center" }}>
+              Mono. Error
+              <InfoTooltip metricKey="monotonicity_error" />
+              {": "}
+              <b style={{ color: "#f59e0b", marginLeft: 3 }}>{cur.monotonicity_error}</b>
             </span>
-            <span>
-              Aggregation:{" "}
-              <b style={{ color: "#10b981" }}>
+            <span style={{ display: "flex", alignItems: "center" }}>
+              Aggregation
+              <InfoTooltip metricKey="aggregation" />
+              {": "}
+              <b style={{ color: "#10b981", marginLeft: 3 }}>
                 {(cur.aggregation * 100).toFixed(1)}%
               </b>
             </span>
