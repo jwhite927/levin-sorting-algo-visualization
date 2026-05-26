@@ -5,6 +5,8 @@ described in Zhang, Goldstein & Levin (2024). Watch emergence happen, step by st
 
 ---
 
+![Screenshot of the application](./screenshot.png)
+
 ## Background
 
 ### The Paper
