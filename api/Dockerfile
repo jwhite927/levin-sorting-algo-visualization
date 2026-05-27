@@ -6,7 +6,11 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# ── Stage 2: Python API + compiled frontend ───────────────────────────────────
+# ── Stage 2: fetch cell_research (git submodule not initialized by Railway) ───
+FROM alpine/git AS cell-research-fetcher
+RUN git clone --depth 1 https://github.com/jwhite927/cell_research.git /cell_research
+
+# ── Stage 3: Python API + compiled frontend ───────────────────────────────────
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -14,10 +18,10 @@ WORKDIR /app
 COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy cell_research into a dedicated /packages/ directory so that PYTHONPATH
-# points to exactly one folder containing exactly one package — avoiding the
-# namespace-package ambiguity that occurs with PYTHONPATH=/ (too broad).
-COPY cell_research /packages/cell_research
+# Pull cell_research from the dedicated fetch stage — avoids the empty-directory
+# problem caused by Railway not initialising git submodules during the build.
+# PYTHONPATH=/packages so Python resolves `import cell_research` cleanly.
+COPY --from=cell-research-fetcher /cell_research /packages/cell_research
 ENV PYTHONPATH=/packages
 
 COPY api/ .
